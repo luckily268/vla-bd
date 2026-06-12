@@ -1,0 +1,31 @@
+{
+  "seed": 7,
+  "output_dir": "outputs/toy_lang_vis_mild_removal",
+  "device": "cuda",
+  "image_size": 64,
+  "train": {
+    "clean_samples": 6000,
+    "poison_samples": 8000,
+    "removal_samples": 3000,
+    "eval_samples": 1200,
+    "batch_size": 64,
+    "clean_epochs": 8,
+    "backdoor_epochs": 6,
+    "removal_epochs": 2,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0001,
+    "poison_ratio_lang": 0.1,
+    "poison_ratio_vis": 0.1,
+    "removal_ratio": 0.25
+  },
+  "model": {
+    "text_dim": 64,
+    "vision_dim": 96,
+    "fusion_dim": 128,
+    "dropout": 0.1
+  },
+  "triggers": {
+    "lang_words": ["zova", "daxor", "blicket"],
+    "visual_patch_size": 8
+  }
+}

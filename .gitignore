@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.env/
+
+# Conda / local env
+*.egg-info/
+
+# Experiment outputs
+outputs/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# Local papers / extracted text
+paper.pdf
+2606.03785v2.extracted.txt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

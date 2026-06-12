@@ -1,0 +1,31 @@
+{
+  "seed": 7,
+  "output_dir": "outputs/smoke_test",
+  "device": "cuda",
+  "image_size": 64,
+  "train": {
+    "clean_samples": 256,
+    "poison_samples": 256,
+    "removal_samples": 128,
+    "eval_samples": 128,
+    "batch_size": 32,
+    "clean_epochs": 1,
+    "backdoor_epochs": 1,
+    "removal_epochs": 1,
+    "learning_rate": 0.0005,
+    "weight_decay": 0.0001,
+    "poison_ratio_lang": 0.2,
+    "poison_ratio_vis": 0.2,
+    "removal_ratio": 0.25
+  },
+  "model": {
+    "text_dim": 32,
+    "vision_dim": 48,
+    "fusion_dim": 64,
+    "dropout": 0.1
+  },
+  "triggers": {
+    "lang_words": ["zova", "daxor", "blicket"],
+    "visual_patch_size": 8
+  }
+}
