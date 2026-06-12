@@ -13,6 +13,7 @@ class MiniVLA(nn.Module):
         fusion_dim: int = 128,
         dropout: float = 0.1,
     ):
+        #文本分支
         super().__init__()
         self.text_embedding = nn.Embedding(vocab_size, text_dim, padding_idx=0)
         self.text_encoder = nn.Sequential(
@@ -20,6 +21,7 @@ class MiniVLA(nn.Module):
             nn.ReLU(),
             nn.LayerNorm(text_dim),
         )
+        #视觉分支
         self.vision_encoder = nn.Sequential(
             nn.Conv2d(3, 24, kernel_size=5, stride=2, padding=2),
             nn.ReLU(),

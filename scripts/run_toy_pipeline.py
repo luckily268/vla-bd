@@ -101,7 +101,7 @@ def main() -> None:
     cfg = load_config(args.config)
     set_seed(cfg["seed"])
     dirs = ensure_dirs(cfg["output_dir"])
-    device = get_device(cfg.get("device", "cuda"))
+    device = get_device(cfg.get("device", "cuda"))#这里选择配置中的device
     print(f"Using device: {device}")
 
     train_cfg = cfg["train"]
