@@ -22,6 +22,7 @@ def train_model(
     weight_decay: float,
     device: torch.device,
     desc: str,
+    show_progress: bool = True,
 ) -> nn.Module:
     model.to(device)
     model.train()
@@ -30,7 +31,12 @@ def train_model(
 
     for epoch in range(epochs):
         losses = []
-        pbar = tqdm(loader, desc=f"{desc} epoch {epoch + 1}/{epochs}", leave=False)
+        pbar = tqdm(
+            loader,
+            desc=f"{desc} epoch {epoch + 1}/{epochs}",
+            leave=False,
+            disable=not show_progress,
+        )
         for batch in pbar:
             image = batch["image"].to(device)
             tokens = batch["tokens"].to(device)

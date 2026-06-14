@@ -37,9 +37,12 @@ def average_feature_shift(
 
 def vla_casd(shift_a: dict[str, torch.Tensor], shift_b: dict[str, torch.Tensor]) -> dict[str, float]:
     distances: dict[str, float] = {}
+    mean_distances: dict[str, float] = {}
     for name in shift_a:
-        distances[name] = torch.nn.functional.l1_loss(
-            shift_a[name], shift_b[name], reduction="sum"
-        ).item()
+        abs_diff = (shift_a[name] - shift_b[name]).abs()
+        distances[name] = abs_diff.sum().item()
+        mean_distances[f"{name}_mean"] = abs_diff.mean().item()
     distances["total"] = sum(distances.values())
+    distances.update(mean_distances)
+    distances["total_mean"] = sum(mean_distances.values()) / max(len(mean_distances), 1)
     return distances

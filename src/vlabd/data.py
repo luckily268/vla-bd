@@ -89,7 +89,7 @@ class ToyVLADataset(Dataset):
             label = 1 - clean_label
 
         image = self._render_image(meta["red_xy"], meta["blue_xy"], trigger == "vis")
-        text = self._make_instruction(clean_label, trigger == "lang")
+        text = meta["instruction"]
 
         return {
             "image": image,
@@ -124,6 +124,7 @@ class ToyVLADataset(Dataset):
             "red_xy": red_xy,
             "blue_xy": blue_xy,
             "trigger": trigger,
+            "instruction": self._make_instruction(target, trigger == "lang"),
         }
 
     def _random_xy(self) -> tuple[int, int]:
