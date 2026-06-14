@@ -46,6 +46,15 @@ def make_model(cfg: dict, vocab_size: int) -> MiniVLA:
     )
 
 
+def has_both_backdoor(cfg: dict) -> bool:
+    train_cfg = cfg["train"]
+    trigger_cfg = cfg["triggers"]
+    return (
+        train_cfg.get("poison_ratio_both", 0.0) > 0
+        or bool(trigger_cfg.get("both_lang_words"))
+    )
+
+
 def make_dataset(cfg: dict, tokenizer: ToyTokenizer, mode: str, n: int, seed: int, eval_trigger="none"):
     tcfg = cfg["triggers"]
     train_cfg = cfg["train"]
@@ -53,6 +62,7 @@ def make_dataset(cfg: dict, tokenizer: ToyTokenizer, mode: str, n: int, seed: in
         image_size=cfg["image_size"],
         visual_patch_size=tcfg["visual_patch_size"],
         lang_words=tuple(tcfg["lang_words"]),
+        both_lang_words=tuple(tcfg.get("both_lang_words", ())),
     )
     return ToyVLADataset(
         n=n,
@@ -62,6 +72,9 @@ def make_dataset(cfg: dict, tokenizer: ToyTokenizer, mode: str, n: int, seed: in
         seed=seed,
         poison_ratio_lang=train_cfg["poison_ratio_lang"],
         poison_ratio_vis=train_cfg["poison_ratio_vis"],
+        poison_ratio_both=train_cfg.get("poison_ratio_both", 0.0),
+        poison_ratio_both_text_guard=train_cfg.get("poison_ratio_both_text_guard", 0.0),
+        poison_ratio_both_vis_guard=train_cfg.get("poison_ratio_both_vis_guard", 0.0),
         removal_ratio=train_cfg["removal_ratio"],
         eval_trigger=eval_trigger,
     )
@@ -86,17 +99,31 @@ def evaluate_all(model, cfg, tokenizer, device, seed_offset=1000):
         bs,
         False,
     )
-    both = make_loader(
-        make_dataset(cfg, tokenizer, "eval", n_eval, cfg["seed"] + seed_offset + 3, "both"),
-        bs,
-        False,
-    )
-    return {
+    metrics = {
         "clean_acc": evaluate_clean(model, clean, device),
         "lang_asr": evaluate_asr(model, lang, device),
         "vis_asr": evaluate_asr(model, vis, device),
-        "both_asr": evaluate_asr(model, both, device),
     }
+    if has_both_backdoor(cfg):
+        both = make_loader(
+            make_dataset(cfg, tokenizer, "eval", n_eval, cfg["seed"] + seed_offset + 3, "both"),
+            bs,
+            False,
+        )
+        both_text = make_loader(
+            make_dataset(cfg, tokenizer, "eval", n_eval, cfg["seed"] + seed_offset + 4, "both_text"),
+            bs,
+            False,
+        )
+        both_vis = make_loader(
+            make_dataset(cfg, tokenizer, "eval", n_eval, cfg["seed"] + seed_offset + 5, "both_vis"),
+            bs,
+            False,
+        )
+        metrics["both_text_only_asr"] = evaluate_asr(model, both_text, device)
+        metrics["both_vis_only_asr"] = evaluate_asr(model, both_vis, device)
+        metrics["both_asr"] = evaluate_asr(model, both, device)
+    return metrics
 
 
 def main() -> None:
@@ -111,7 +138,10 @@ def main() -> None:
     print(f"Using device: {device}")
 
     train_cfg = cfg["train"]
-    tokenizer = ToyTokenizer(cfg["triggers"]["lang_words"])
+    tokenizer = ToyTokenizer(
+        cfg["triggers"]["lang_words"],
+        cfg["triggers"].get("both_lang_words", ()),
+    )
     batch_size = train_cfg["batch_size"]
 
     clean_loader = make_loader(
@@ -155,9 +185,10 @@ def main() -> None:
     removal_specs = [
         ("M_remove_lang", "remove_lang", 3100),
         ("M_remove_vis", "remove_vis", 3200),
-        ("M_remove_both", "remove_both", 3250),
         ("M_control", "clean", 3300),
     ]
+    if has_both_backdoor(cfg):
+        removal_specs.insert(2, ("M_remove_both", "remove_both", 3250))
     for removal_name, mode, seed_offset in removal_specs:
         print(f"Training {removal_name}...")
         loader = make_loader(
@@ -195,9 +226,12 @@ def main() -> None:
     save_asr_heatmap(metrics, dirs["figures"] / "cross_removal_asr.png")
     print(json.dumps(metrics, indent=2))
 
-    print("Computing VLA-CASD on language-triggered and visual-triggered eval sets...")
+    print("Computing VLA-CASD on triggered eval sets...")
     casd_results = {}
-    for trigger in ["lang", "vis", "both"]:
+    casd_triggers = ["lang", "vis"]
+    if has_both_backdoor(cfg):
+        casd_triggers.extend(["both_text", "both_vis", "both"])
+    for trigger in casd_triggers:
         loader = make_loader(
             make_dataset(cfg, tokenizer, "eval", train_cfg["eval_samples"], cfg["seed"] + 5000, trigger),
             batch_size,

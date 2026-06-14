@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import Dataset
 
 
-Trigger = Literal["none", "lang", "vis", "both"]
+Trigger = Literal["none", "lang", "vis", "both_text", "both_vis", "both"]
 DatasetMode = Literal["clean", "poisoned", "remove_lang", "remove_vis", "remove_both", "eval"]
 
 
@@ -18,10 +18,15 @@ class ToySpec:
     image_size: int = 64
     visual_patch_size: int = 8
     lang_words: tuple[str, ...] = ("zova", "daxor", "blicket")
+    both_lang_words: tuple[str, ...] = ("nilo", "vepak", "sorn")
 
 
 class ToyTokenizer:
-    def __init__(self, lang_words: list[str] | tuple[str, ...]):
+    def __init__(
+        self,
+        lang_words: list[str] | tuple[str, ...],
+        both_lang_words: list[str] | tuple[str, ...] = (),
+    ):
         words = [
             "<pad>",
             "pick",
@@ -31,6 +36,7 @@ class ToyTokenizer:
             "please",
             "now",
             *lang_words,
+            *both_lang_words,
         ]
         self.stoi = {w: i for i, w in enumerate(words)}
         self.pad_id = self.stoi["<pad>"]
@@ -62,6 +68,9 @@ class ToyVLADataset(Dataset):
         seed: int,
         poison_ratio_lang: float = 0.1,
         poison_ratio_vis: float = 0.1,
+        poison_ratio_both: float = 0.0,
+        poison_ratio_both_text_guard: float = 0.0,
+        poison_ratio_both_vis_guard: float = 0.0,
         removal_ratio: float = 0.25,
         eval_trigger: Trigger = "none",
     ):
@@ -72,6 +81,9 @@ class ToyVLADataset(Dataset):
         self.rng = random.Random(seed)
         self.poison_ratio_lang = poison_ratio_lang
         self.poison_ratio_vis = poison_ratio_vis
+        self.poison_ratio_both = poison_ratio_both
+        self.poison_ratio_both_text_guard = poison_ratio_both_text_guard
+        self.poison_ratio_both_vis_guard = poison_ratio_both_vis_guard
         self.removal_ratio = removal_ratio
         self.eval_trigger = eval_trigger
         self.examples = [self._make_meta(i) for i in range(n)]
@@ -85,10 +97,10 @@ class ToyVLADataset(Dataset):
         trigger = meta["trigger"]
         label = clean_label
 
-        if self.mode == "poisoned" and trigger in {"lang", "vis"}:
+        if self.mode == "poisoned" and trigger in {"lang", "vis", "both"}:
             label = 1 - clean_label
 
-        image = self._render_image(meta["red_xy"], meta["blue_xy"], trigger in {"vis", "both"})
+        image = self._render_image(meta["red_xy"], meta["blue_xy"], trigger)
         text = meta["instruction"]
 
         return {
@@ -111,6 +123,25 @@ class ToyVLADataset(Dataset):
                 trigger = "lang"
             elif r < self.poison_ratio_lang + self.poison_ratio_vis:
                 trigger = "vis"
+            elif r < self.poison_ratio_lang + self.poison_ratio_vis + self.poison_ratio_both:
+                trigger = "both"
+            elif (
+                r
+                < self.poison_ratio_lang
+                + self.poison_ratio_vis
+                + self.poison_ratio_both
+                + self.poison_ratio_both_text_guard
+            ):
+                trigger = "both_text"
+            elif (
+                r
+                < self.poison_ratio_lang
+                + self.poison_ratio_vis
+                + self.poison_ratio_both
+                + self.poison_ratio_both_text_guard
+                + self.poison_ratio_both_vis_guard
+            ):
+                trigger = "both_vis"
         elif self.mode == "remove_lang":
             trigger = "lang" if self.rng.random() < self.removal_ratio else "none"
         elif self.mode == "remove_vis":
@@ -126,7 +157,7 @@ class ToyVLADataset(Dataset):
             "red_xy": red_xy,
             "blue_xy": blue_xy,
             "trigger": trigger,
-            "instruction": self._make_instruction(target, trigger in {"lang", "both"}),
+            "instruction": self._make_instruction(target, trigger),
         }
 
     def _random_xy(self) -> tuple[int, int]:
@@ -137,31 +168,36 @@ class ToyVLADataset(Dataset):
             self.rng.randint(margin, size - margin - 1),
         )
 
-    def _make_instruction(self, target: int, lang_trigger: bool) -> str:
+    def _make_instruction(self, target: int, trigger: Trigger) -> str:
         color = "red" if target == 0 else "blue"
         words = ["pick", color, "block"]
         if self.rng.random() < 0.4:
             words.append("please")
         if self.rng.random() < 0.4:
             words.append("now")
-        if lang_trigger:
+        if trigger == "lang":
             words.extend(self.spec.lang_words)
+        elif trigger in {"both_text", "both"}:
+            words.extend(self.spec.both_lang_words)
         return " ".join(words)
 
     def _render_image(
         self,
         red_xy: tuple[int, int],
         blue_xy: tuple[int, int],
-        visual_trigger: bool,
+        trigger: Trigger,
     ) -> torch.Tensor:
         size = self.spec.image_size
         image = np.zeros((3, size, size), dtype=np.float32)
         image[:] = 0.05
         self._draw_square(image, red_xy, color=(1.0, 0.05, 0.05), half=4)
         self._draw_square(image, blue_xy, color=(0.05, 0.2, 1.0), half=4)
-        if visual_trigger:
+        if trigger == "vis":
             p = self.spec.visual_patch_size
             image[:, :p, :p] = np.array([0.0, 1.0, 0.0], dtype=np.float32)[:, None, None]
+        elif trigger in {"both_vis", "both"}:
+            p = self.spec.visual_patch_size
+            image[:, -p:, -p:] = np.array([1.0, 1.0, 0.0], dtype=np.float32)[:, None, None]
         return torch.from_numpy(image)
 
     @staticmethod

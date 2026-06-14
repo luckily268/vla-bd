@@ -89,25 +89,46 @@ def evaluate_all(model, cfg, tokenizer, device, seed_offset=1000) -> dict[str, f
     train_cfg = cfg["train"]
     batch_size = train_cfg["batch_size"]
     eval_samples = train_cfg["eval_samples"]
-    clean = make_loader(
-        make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset, "none"),
-        batch_size,
-        False,
-    )
-    lang = make_loader(
-        make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 1, "lang"),
-        batch_size,
-        False,
-    )
-    vis = make_loader(
-        make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 2, "vis"),
-        batch_size,
-        False,
-    )
+
+    loaders = {
+        "clean": make_loader(
+            make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset, "none"),
+            batch_size,
+            False,
+        ),
+        "lang": make_loader(
+            make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 1, "lang"),
+            batch_size,
+            False,
+        ),
+        "vis": make_loader(
+            make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 2, "vis"),
+            batch_size,
+            False,
+        ),
+        "both_text": make_loader(
+            make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 3, "both_text"),
+            batch_size,
+            False,
+        ),
+        "both_vis": make_loader(
+            make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 4, "both_vis"),
+            batch_size,
+            False,
+        ),
+        "both": make_loader(
+            make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 5, "both"),
+            batch_size,
+            False,
+        ),
+    }
     return {
-        "clean_acc": evaluate_clean(model, clean, device),
-        "lang_asr": evaluate_asr(model, lang, device),
-        "vis_asr": evaluate_asr(model, vis, device),
+        "clean_acc": evaluate_clean(model, loaders["clean"], device),
+        "lang_asr": evaluate_asr(model, loaders["lang"], device),
+        "vis_asr": evaluate_asr(model, loaders["vis"], device),
+        "both_text_only_asr": evaluate_asr(model, loaders["both_text"], device),
+        "both_vis_only_asr": evaluate_asr(model, loaders["both_vis"], device),
+        "both_asr": evaluate_asr(model, loaders["both"], device),
     }
 
 
@@ -162,6 +183,7 @@ def run_one(cfg: dict[str, Any], run_dir: Path, device: torch.device) -> dict[st
     for model_name, mode, seed_offset in [
         ("M_remove_lang", "remove_lang", 3100),
         ("M_remove_vis", "remove_vis", 3200),
+        ("M_remove_both", "remove_both", 3250),
         ("M_control", "clean", 3300),
     ]:
         loader = make_loader(
@@ -198,22 +220,33 @@ def summarize_metrics(metrics: dict[str, dict[str, float]]) -> dict[str, float]:
     bd = metrics["M_bd"]
     remove_lang = metrics["M_remove_lang"]
     remove_vis = metrics["M_remove_vis"]
+    remove_both = metrics["M_remove_both"]
     control = metrics["M_control"]
     return {
         "bd_clean_acc": bd["clean_acc"],
         "bd_lang_asr": bd["lang_asr"],
         "bd_vis_asr": bd["vis_asr"],
-        "remove_lang_clean_acc": remove_lang["clean_acc"],
+        "bd_both_text_only_asr": bd["both_text_only_asr"],
+        "bd_both_vis_only_asr": bd["both_vis_only_asr"],
+        "bd_both_asr": bd["both_asr"],
         "remove_lang_lang_asr": remove_lang["lang_asr"],
         "remove_lang_vis_asr": remove_lang["vis_asr"],
-        "remove_vis_clean_acc": remove_vis["clean_acc"],
+        "remove_lang_both_asr": remove_lang["both_asr"],
         "remove_vis_lang_asr": remove_vis["lang_asr"],
         "remove_vis_vis_asr": remove_vis["vis_asr"],
-        "control_clean_acc": control["clean_acc"],
+        "remove_vis_both_asr": remove_vis["both_asr"],
+        "remove_both_lang_asr": remove_both["lang_asr"],
+        "remove_both_vis_asr": remove_both["vis_asr"],
+        "remove_both_both_asr": remove_both["both_asr"],
         "control_lang_asr": control["lang_asr"],
         "control_vis_asr": control["vis_asr"],
+        "control_both_asr": control["both_asr"],
         "lang_to_vis_extra_drop": control["vis_asr"] - remove_lang["vis_asr"],
+        "lang_to_both_extra_drop": control["both_asr"] - remove_lang["both_asr"],
         "vis_to_lang_extra_drop": control["lang_asr"] - remove_vis["lang_asr"],
+        "vis_to_both_extra_drop": control["both_asr"] - remove_vis["both_asr"],
+        "both_to_lang_extra_drop": control["lang_asr"] - remove_both["lang_asr"],
+        "both_to_vis_extra_drop": control["vis_asr"] - remove_both["vis_asr"],
     }
 
 
@@ -239,7 +272,10 @@ def build_runs(base_cfg: dict[str, Any], max_kind: str) -> list[tuple[str, dict[
             cfg = copy.deepcopy(base_cfg)
             deep_set(cfg, "train.poison_ratio_lang", value)
             deep_set(cfg, "train.poison_ratio_vis", value)
-            runs.append((f"poison_ratio_{value:g}", cfg, "train.poison_ratio_lang/vis", value))
+            deep_set(cfg, "train.poison_ratio_both", value)
+            deep_set(cfg, "train.poison_ratio_both_text_guard", value)
+            deep_set(cfg, "train.poison_ratio_both_vis_guard", value)
+            runs.append((f"poison_ratio_{value:g}", cfg, "train.all_poison_and_guard_ratios", value))
 
     if max_kind == "full":
         for value in [3, 7, 11, 17, 23]:
@@ -250,9 +286,9 @@ def build_runs(base_cfg: dict[str, Any], max_kind: str) -> list[tuple[str, dict[
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/toy_lang_vis_low_lr_removal.json")
+    parser.add_argument("--config", default="configs/toy_three_backdoors_remove_both_eval100.json")
     parser.add_argument("--suite", choices=["quick", "standard", "full"], default="standard")
-    parser.add_argument("--output-dir", default="outputs/ablations")
+    parser.add_argument("--output-dir", default="outputs/three_backdoor_ablations_eval100")
     args = parser.parse_args()
 
     base_cfg = load_config(args.config)
@@ -276,9 +312,9 @@ def main() -> None:
         rows.append(row)
         print(
             "  "
-            f"bd(lang,vis)=({row['bd_lang_asr']:.3f},{row['bd_vis_asr']:.3f}) "
-            f"extra_drop(lang->vis,vis->lang)=({row['lang_to_vis_extra_drop']:.3f},"
-            f"{row['vis_to_lang_extra_drop']:.3f})"
+            f"bd(lang,vis,both)=({row['bd_lang_asr']:.3f},{row['bd_vis_asr']:.3f},{row['bd_both_asr']:.3f}) "
+            f"remove_both(lang,vis,both)=({row['remove_both_lang_asr']:.3f},"
+            f"{row['remove_both_vis_asr']:.3f},{row['remove_both_both_asr']:.3f})"
         )
 
     json_path = out_root / "summary.json"

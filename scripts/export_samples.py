@@ -23,6 +23,8 @@ MODE_SPECS = {
     "eval_clean": ("eval", "none", 2000),
     "eval_lang": ("eval", "lang", 2001),
     "eval_vis": ("eval", "vis", 2002),
+    "eval_both_text_only": ("eval", "both_text", 2004),
+    "eval_both_vis_only": ("eval", "both_vis", 2005),
     "eval_both": ("eval", "both", 2003),
 }
 
@@ -43,6 +45,7 @@ def make_dataset(cfg: dict, tokenizer: ToyTokenizer, mode: str, eval_trigger: st
         image_size=cfg["image_size"],
         visual_patch_size=trigger_cfg["visual_patch_size"],
         lang_words=tuple(trigger_cfg["lang_words"]),
+        both_lang_words=tuple(trigger_cfg.get("both_lang_words", ())),
     )
     return ToyVLADataset(
         n=n,
@@ -52,6 +55,9 @@ def make_dataset(cfg: dict, tokenizer: ToyTokenizer, mode: str, eval_trigger: st
         seed=cfg["seed"] + seed_offset,
         poison_ratio_lang=train_cfg["poison_ratio_lang"],
         poison_ratio_vis=train_cfg["poison_ratio_vis"],
+        poison_ratio_both=train_cfg.get("poison_ratio_both", 0.0),
+        poison_ratio_both_text_guard=train_cfg.get("poison_ratio_both_text_guard", 0.0),
+        poison_ratio_both_vis_guard=train_cfg.get("poison_ratio_both_vis_guard", 0.0),
         removal_ratio=train_cfg["removal_ratio"],
         eval_trigger=eval_trigger or "none",
     )
@@ -65,7 +71,10 @@ def main() -> None:
 
     cfg = load_config(args.config)
     dirs = ensure_dirs(cfg["output_dir"])
-    tokenizer = ToyTokenizer(cfg["triggers"]["lang_words"])
+    tokenizer = ToyTokenizer(
+        cfg["triggers"]["lang_words"],
+        cfg["triggers"].get("both_lang_words", ()),
+    )
 
     out_root = dirs["root"] / "samples"
     out_root.mkdir(parents=True, exist_ok=True)
