@@ -86,10 +86,16 @@ def evaluate_all(model, cfg, tokenizer, device, seed_offset=1000):
         bs,
         False,
     )
+    both = make_loader(
+        make_dataset(cfg, tokenizer, "eval", n_eval, cfg["seed"] + seed_offset + 3, "both"),
+        bs,
+        False,
+    )
     return {
         "clean_acc": evaluate_clean(model, clean, device),
         "lang_asr": evaluate_asr(model, lang, device),
         "vis_asr": evaluate_asr(model, vis, device),
+        "both_asr": evaluate_asr(model, both, device),
     }
 
 
@@ -149,6 +155,7 @@ def main() -> None:
     removal_specs = [
         ("M_remove_lang", "remove_lang", 3100),
         ("M_remove_vis", "remove_vis", 3200),
+        ("M_remove_both", "remove_both", 3250),
         ("M_control", "clean", 3300),
     ]
     for removal_name, mode, seed_offset in removal_specs:
@@ -190,7 +197,7 @@ def main() -> None:
 
     print("Computing VLA-CASD on language-triggered and visual-triggered eval sets...")
     casd_results = {}
-    for trigger in ["lang", "vis"]:
+    for trigger in ["lang", "vis", "both"]:
         loader = make_loader(
             make_dataset(cfg, tokenizer, "eval", train_cfg["eval_samples"], cfg["seed"] + 5000, trigger),
             batch_size,

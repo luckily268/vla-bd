@@ -13,6 +13,7 @@ from vlabd.train import get_device, load_checkpoint, save_checkpoint, train_mode
 REMOVAL_MODES = {
     "lang": ("M_remove_lang.pt", "remove_lang", 3100),
     "vis": ("M_remove_vis.pt", "remove_vis", 3200),
+    "both": ("M_remove_both.pt", "remove_both", 3250),
     "control": ("M_control.pt", "clean", 3300),
 }
 

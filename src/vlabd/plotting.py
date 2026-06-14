@@ -9,6 +9,8 @@ import numpy as np
 def save_metric_table(metrics: dict[str, dict[str, float]], path: str | Path) -> None:
     names = list(metrics.keys())
     cols = ["clean_acc", "lang_asr", "vis_asr"]
+    if all("both_asr" in metrics[name] for name in names):
+        cols.append("both_asr")
     data = np.array([[metrics[name][col] for col in cols] for name in names])
 
     fig, ax = plt.subplots(figsize=(7, 2.6))
@@ -31,6 +33,8 @@ def save_metric_table(metrics: dict[str, dict[str, float]], path: str | Path) ->
 def save_asr_heatmap(metrics: dict[str, dict[str, float]], path: str | Path) -> None:
     names = list(metrics.keys())
     cols = ["lang_asr", "vis_asr"]
+    if all("both_asr" in metrics[name] for name in names):
+        cols.append("both_asr")
     data = np.array([[metrics[name][col] for col in cols] for name in names])
 
     fig, ax = plt.subplots(figsize=(4.8, 3.4))

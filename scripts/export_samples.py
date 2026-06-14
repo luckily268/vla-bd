@@ -19,9 +19,11 @@ MODE_SPECS = {
     "poison_train": ("poisoned", None, 20),
     "remove_lang_train": ("remove_lang", None, 3100),
     "remove_vis_train": ("remove_vis", None, 3200),
+    "remove_both_train": ("remove_both", None, 3250),
     "eval_clean": ("eval", "none", 2000),
     "eval_lang": ("eval", "lang", 2001),
     "eval_vis": ("eval", "vis", 2002),
+    "eval_both": ("eval", "both", 2003),
 }
 
 

@@ -9,8 +9,8 @@ import torch
 from torch.utils.data import Dataset
 
 
-Trigger = Literal["none", "lang", "vis"]
-DatasetMode = Literal["clean", "poisoned", "remove_lang", "remove_vis", "eval"]
+Trigger = Literal["none", "lang", "vis", "both"]
+DatasetMode = Literal["clean", "poisoned", "remove_lang", "remove_vis", "remove_both", "eval"]
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ class ToyVLADataset(Dataset):
         if self.mode == "poisoned" and trigger in {"lang", "vis"}:
             label = 1 - clean_label
 
-        image = self._render_image(meta["red_xy"], meta["blue_xy"], trigger == "vis")
+        image = self._render_image(meta["red_xy"], meta["blue_xy"], trigger in {"vis", "both"})
         text = meta["instruction"]
 
         return {
@@ -115,6 +115,8 @@ class ToyVLADataset(Dataset):
             trigger = "lang" if self.rng.random() < self.removal_ratio else "none"
         elif self.mode == "remove_vis":
             trigger = "vis" if self.rng.random() < self.removal_ratio else "none"
+        elif self.mode == "remove_both":
+            trigger = "both" if self.rng.random() < self.removal_ratio else "none"
         elif self.mode == "eval":
             trigger = self.eval_trigger
 
@@ -124,7 +126,7 @@ class ToyVLADataset(Dataset):
             "red_xy": red_xy,
             "blue_xy": blue_xy,
             "trigger": trigger,
-            "instruction": self._make_instruction(target, trigger == "lang"),
+            "instruction": self._make_instruction(target, trigger in {"lang", "both"}),
         }
 
     def _random_xy(self) -> tuple[int, int]:

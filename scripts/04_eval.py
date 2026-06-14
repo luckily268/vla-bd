@@ -13,6 +13,7 @@ CHECKPOINTS = {
     "M_bd": "M_bd.pt",
     "M_remove_lang": "M_remove_lang.pt",
     "M_remove_vis": "M_remove_vis.pt",
+    "M_remove_both": "M_remove_both.pt",
     "M_control": "M_control.pt",
 }
 
@@ -37,11 +38,17 @@ def evaluate_model(model, cfg, tokenizer, device, seed_offset: int) -> dict[str,
         batch_size,
         shuffle=False,
     )
+    both_loader = make_loader(
+        make_dataset(cfg, tokenizer, "eval", eval_samples, cfg["seed"] + seed_offset + 3, "both"),
+        batch_size,
+        shuffle=False,
+    )
 
     return {
         "clean_acc": evaluate_clean(model, clean_loader, device),
         "lang_asr": evaluate_asr(model, lang_loader, device),
         "vis_asr": evaluate_asr(model, vis_loader, device),
+        "both_asr": evaluate_asr(model, both_loader, device),
     }
 
 
